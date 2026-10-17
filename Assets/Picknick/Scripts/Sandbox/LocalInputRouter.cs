@@ -36,7 +36,7 @@ namespace Picknick.Sandbox
             }
         }
 
-        static CreatureInput ReadKeyboard(Keyboard kb, Mouse mouse, Vector3 creaturePosition)
+        public static CreatureInput ReadKeyboard(Keyboard kb, Mouse mouse, Vector3 creaturePosition)
         {
             float move = 0f;
             if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) move -= 1f;
@@ -65,7 +65,7 @@ namespace Picknick.Sandbox
             };
         }
 
-        static CreatureInput ReadGamepad(Gamepad pad)
+        public static CreatureInput ReadGamepad(Gamepad pad)
         {
             Vector2 stick = pad.leftStick.ReadValue();
             float move = Mathf.Abs(stick.x) > 0.2f ? Mathf.Sign(stick.x) * Mathf.InverseLerp(0.2f, 1f, Mathf.Abs(stick.x)) : 0f;
@@ -84,7 +84,7 @@ namespace Picknick.Sandbox
             };
         }
 
-        static void Merge(ref CreatureInput into, CreatureInput from)
+        public static void Merge(ref CreatureInput into, CreatureInput from)
         {
             into.Move = Mathf.Clamp(into.Move + from.Move, -1f, 1f);
             into.JumpHeld |= from.JumpHeld;

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.Creature;
+using Picknick.Net;
 using Picknick.Puzzle;
 using Picknick.Sandbox;
 using UnityEngine;
@@ -87,6 +88,7 @@ namespace Picknick.Rooms
             doorObject.AddComponent<BoxCollider2D>();
             doorObject.AddComponent<Rigidbody2D>();
             var door = doorObject.AddComponent<HoldDoor>();
+            doorObject.AddComponent<SyncedBody>();
             door.holdZone = holdZone;
             GameObject spoon = Visual(level, "Spoon Lever", new Vector2(39f, 5.1f), new Vector2(0.25f, 0.7f), MetalColor, 0);
             spoon.AddComponent<BoxCollider2D>();
@@ -111,6 +113,7 @@ namespace Picknick.Rooms
 
             GameObject hatch = Block(level, "Hatch", new Vector2(53.7f, 10.25f), new Vector2(0.6f, 2.5f), WoodColor);
             var hatchLock = hatch.AddComponent<Hatch>();
+            hatch.AddComponent<SyncedBody>();
             hatchLock.key = key.transform;
             hatchLock.keyhole = AddZone(level, "Keyhole", new Vector2(52.6f, 10f), new Vector2(1.6f, 2f));
             Visual(level, "Keyhole Mark", new Vector2(53.7f, 10.25f), new Vector2(0.2f, 0.35f), KeyColor, 1).transform.SetParent(hatch.transform, true);
