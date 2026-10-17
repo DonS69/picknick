@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.CameraRig;
 using Picknick.Creature;
@@ -27,10 +28,10 @@ namespace Picknick.Sandbox
             new Color(0.95f, 0.95f, 0.95f),
         };
 
-        static readonly Color GroundColor = new Color(0.55f, 0.53f, 0.50f);
-        static readonly Color CrateColor = new Color(0.80f, 0.62f, 0.40f);
-        static readonly Color HeavyColor = new Color(0.35f, 0.30f, 0.28f);
-        static readonly Color MetalColor = new Color(0.55f, 0.65f, 0.75f);
+        protected static readonly Color GroundColor = new Color(0.55f, 0.53f, 0.50f);
+        protected static readonly Color CrateColor = new Color(0.80f, 0.62f, 0.40f);
+        protected static readonly Color HeavyColor = new Color(0.35f, 0.30f, 0.28f);
+        protected static readonly Color MetalColor = new Color(0.55f, 0.65f, 0.75f);
 
         // Starting badges for creatures 1-4, as in Room 1 of the plan.
         static readonly AbilityType[] StartingAbilities =
@@ -40,6 +41,15 @@ namespace Picknick.Sandbox
 
         Sprite square;
         LocalInputRouter router;
+
+        protected IReadOnlyList<CreatureController> Creatures => router.Creatures;
+        protected virtual Vector2 SpawnOrigin => new Vector2(0f, 1f);
+        protected virtual float KillHeight => -6f;
+
+        protected virtual string Hint =>
+            "Magnet: hold to pull blue metal or a teammate to you. In the air, or on fixed metal, it pulls YOU.\n" +
+            "Feather: hold jump in the air to glide. Ability grabs or drops a teammate.\n" +
+            "Strong: push the dark heavy can. Ability picks up a teammate, press again to throw.";
         Transform keyboardMarker;
 
         void Awake()
@@ -61,15 +71,15 @@ namespace Picknick.Sandbox
 
         GUIStyle hintStyle;
 
-        void OnGUI()
+        protected GUIStyle HintStyle => hintStyle;
+
+        protected virtual void OnGUI()
         {
             hintStyle ??= new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(0.2f, 0.2f, 0.2f) } };
-            GUI.Label(new Rect(12, 8, 900, 110),
+            GUI.Label(new Rect(12, 8, 900, 120),
                 "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature\n" +
                 "Gamepads: one per creature. Stick move, A jump, right stick aims, X or RT = ability, Y = swap\n" +
-                "Magnet: hold to pull metal (blue) or teammates. Heavier or fixed metal pulls YOU.\n" +
-                "Feather: hold jump in the air to glide. Ability grabs or drops a teammate.\n" +
-                "Strong: push the dark heavy can. Ability picks up a teammate, press again to throw.", hintStyle);
+                Hint, hintStyle);
 
             Camera cam = Camera.main;
             if (cam == null) return;
@@ -85,7 +95,7 @@ namespace Picknick.Sandbox
 
         GUIStyle labelStyle;
 
-        void BuildLevel()
+        protected virtual void BuildLevel()
         {
             var level = new GameObject("Level").transform;
 
@@ -119,14 +129,14 @@ namespace Picknick.Sandbox
             {
                 var go = new GameObject($"Creature {i + 1}");
                 go.transform.SetParent(root);
-                go.transform.position = new Vector2(i * 1.2f, 1f);
+                go.transform.position = SpawnOrigin + new Vector2(i * 1.2f, 0f);
 
                 go.AddComponent<Rigidbody2D>();
                 go.AddComponent<BoxCollider2D>();
                 CreatureController creature = go.AddComponent<CreatureController>();
                 if (tuning != null)
                     creature.ApplyTuning(tuning);
-                go.AddComponent<FallRespawn>().killHeight = -6f;
+                go.AddComponent<FallRespawn>().killHeight = KillHeight;
                 go.AddComponent<Magnetic>();
                 var abilities = go.AddComponent<CreatureAbilities>();
 
@@ -173,14 +183,14 @@ namespace Picknick.Sandbox
             _ => Color.gray,
         };
 
-        GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
+        protected GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
         {
             GameObject go = Visual(parent, name, center, size, color, -1);
             go.AddComponent<BoxCollider2D>();
             return go;
         }
 
-        GameObject Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
+        protected GameObject Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
         {
             GameObject go = Visual(parent, name, center, size, color, 0);
             go.AddComponent<BoxCollider2D>();
@@ -191,7 +201,7 @@ namespace Picknick.Sandbox
             return go;
         }
 
-        GameObject Visual(Transform parent, string name, Vector2 localPos, Vector2 size, Color color, int order)
+        protected GameObject Visual(Transform parent, string name, Vector2 localPos, Vector2 size, Color color, int order)
         {
             var go = new GameObject(name);
             if (parent != null) go.transform.SetParent(parent, false);
