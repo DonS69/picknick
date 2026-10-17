@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.CameraRig;
-using Picknick.Net;
 using Picknick.Creature;
+using Picknick.Game;
+using Picknick.Net;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Picknick.Sandbox
 {
@@ -63,7 +65,21 @@ namespace Picknick.Sandbox
             BuildLevel();
             SpawnCreatures();
             SetUpCamera();
-            gameObject.AddComponent<NetSession>().Init(router);
+            GameFlow.Ensure().Net.AttachRoom(router);
+        }
+
+        void OnDestroy()
+        {
+            if (GameFlow.Instance != null)
+                GameFlow.Instance.Net.DetachRoom(router);
+        }
+
+        void Update()
+        {
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                menuOpen = !menuOpen;
+            if (Gamepad.current != null && Gamepad.current.startButton.wasPressedThisFrame)
+                menuOpen = !menuOpen;
         }
 
         void LateUpdate()
@@ -74,6 +90,7 @@ namespace Picknick.Sandbox
         }
 
         GUIStyle hintStyle;
+        bool menuOpen;
 
         protected GUIStyle HintStyle => hintStyle;
 
@@ -88,7 +105,7 @@ namespace Picknick.Sandbox
 
             // Panel behind the help text so it stays readable over walls.
             var hint = new GUIContent(
-                "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature\n" +
+                "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature, Esc = menu\n" +
                 "Gamepads: one per creature. Stick move, A jump, right stick aims, X or RT = ability, Y = swap\n" +
                 Hint);
             float width = Mathf.Min(hintStyle.CalcSize(hint).x, Screen.width - 16f);
@@ -119,6 +136,31 @@ namespace Picknick.Sandbox
                 else
                     GUI.Label(new Rect(screen.x - 40f, y, 80f, 20f), label, labelStyle);
             }
+
+            if (menuOpen)
+                DrawMenu();
+        }
+
+        /// <summary>The Esc menu. Online, only the host picks rooms; guests follow.</summary>
+        void DrawMenu()
+        {
+            GameFlow flow = GameFlow.Ensure();
+            var area = new Rect(Screen.width * 0.5f - 130f, Screen.height * 0.5f - 120f, 260f, 240f);
+            GUI.DrawTexture(area, hintBackground);
+            GUILayout.BeginArea(new Rect(area.x + 12f, area.y + 12f, area.width - 24f, area.height - 24f));
+            GUILayout.Label("Menu", HintStyle);
+            if (GUILayout.Button("Resume", GUILayout.Height(32))) menuOpen = false;
+
+            GUI.enabled = flow.CanChangeRoom;
+            if (GUILayout.Button("Restart room", GUILayout.Height(32))) flow.RestartRoom();
+            if (GUILayout.Button(GameFlow.HasNextRoom ? "Skip to next room" : "Last room: back to menu", GUILayout.Height(32))) flow.NextRoom();
+            GUI.enabled = true;
+            if (!flow.CanChangeRoom)
+                GUILayout.Label("Only the host can change rooms.", HintStyle);
+
+            string leave = flow.Net.Online ? (flow.Net.IsHost ? "End the game for everyone" : "Leave the game") : "Main menu";
+            if (GUILayout.Button(leave, GUILayout.Height(32))) flow.ToMenu();
+            GUILayout.EndArea();
         }
 
         bool HasCreatureAbove(CreatureController creature)

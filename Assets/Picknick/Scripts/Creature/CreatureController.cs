@@ -19,6 +19,8 @@ namespace Picknick.Creature
         float coyoteTimer;
         float jumpBufferTimer;
         float noSteerTimer;
+        // True from our own jump until we land: only then does letting go of Jump cut the jump short.
+        bool jumping;
         readonly List<Collider2D> groundHits = new List<Collider2D>(8);
 
         public CreatureTuning Tuning => tuning;
@@ -80,6 +82,7 @@ namespace Picknick.Creature
             body.linearVelocity = velocity;
             noSteerTimer = Mathf.Max(noSteerTimer, noSteerTime);
             coyoteTimer = 0f;
+            jumping = false;
         }
 
         public void SetInput(in CreatureInput next)
@@ -106,6 +109,7 @@ namespace Picknick.Creature
             }
 
             UpdateGrounded();
+            if (IsGrounded) jumping = false;
 
             coyoteTimer = IsGrounded ? tuning.coyoteTime : coyoteTimer - dt;
             jumpBufferTimer -= dt;
@@ -128,6 +132,7 @@ namespace Picknick.Creature
                 jumpBufferTimer = 0f;
                 coyoteTimer = 0f;
                 IsGrounded = false;
+                jumping = true;
             }
 
             velocity.y = Mathf.Max(velocity.y, -fallLimit);
@@ -138,7 +143,8 @@ namespace Picknick.Creature
         float GravityMultiplier(float vy)
         {
             if (vy < 0f) return tuning.fallGravityMultiplier;
-            if (vy > 0f && !input.JumpHeld) return tuning.lowJumpGravityMultiplier;
+            // Short hops only for our own jumps: a throw or a Magnet pull keeps its full height.
+            if (vy > 0f && jumping && !input.JumpHeld) return tuning.lowJumpGravityMultiplier;
             return 1f;
         }
 

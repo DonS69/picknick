@@ -142,6 +142,8 @@ namespace Picknick.Abilities
             {
                 if (hit.collider.isTrigger) continue;
                 if (hit.collider.attachedRigidbody == Creature.Body) continue;
+                // The edge we're standing on doesn't block: you can pull someone up from right at the edge.
+                if (hit.distance < 0.7f && hit.point.y < origin.y - 0.25f) continue;
                 // First thing in the way decides: it's either the target or a wall.
                 return hit.collider.GetComponentInParent<Magnetic>() == candidate;
             }

@@ -1,9 +1,7 @@
-using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.Creature;
 using Picknick.Net;
 using Picknick.Puzzle;
-using Picknick.Sandbox;
 using UnityEngine;
 
 namespace Picknick.Rooms
@@ -13,9 +11,8 @@ namespace Picknick.Rooms
     /// Left to right: A the can, B the sink gap, C the cupboard door, D the fridge finale.
     /// Everyone must end up in the mouse hole on top of the fridge.
     /// </summary>
-    public class KitchenRoom : SandboxBootstrap
+    public class KitchenRoom : RoomBase
     {
-        static readonly Color WoodColor = new Color(0.65f, 0.45f, 0.30f);
         static readonly Color CounterColor = new Color(0.84f, 0.68f, 0.48f);
         static readonly Color CabinetDoorColor = new Color(0.76f, 0.59f, 0.40f);
         static readonly Color StoneColor = new Color(0.35f, 0.35f, 0.38f);
@@ -25,23 +22,14 @@ namespace Picknick.Rooms
         static readonly Color SteelColor = new Color(0.62f, 0.66f, 0.7f);
         static readonly Color KeyColor = new Color(1f, 0.8f, 0.2f);
 
-        ExitZone exit;
-        readonly List<(Transform target, Vector2 offset, string text)> nameTags = new List<(Transform, Vector2, string)>();
-        GUIStyle tagStyle;
-
         protected override Color BackgroundColor => new Color(0.99f, 0.95f, 0.82f);
 
-        protected override Vector2 SpawnOrigin => new Vector2(1f, 1f);
-        protected override float KillHeight => -4f;
+        protected override string Title => "Room 1: The Kitchen Counter";
+        protected override string Goal => "Get all four creatures into the mouse hole on top of the fridge (far right).";
 
-        protected override string Hint =>
-            "Room 1: The Kitchen Counter. Get all four creatures into the mouse hole on top of the fridge (far right).\n" +
-            "HOW TO: " + SectionHint();
-
-        /// <summary>A step-by-step tip for the section the keyboard creature is in.</summary>
-        string SectionHint()
+        protected override string SectionHint(Vector2 position)
         {
-            float x = KeyboardCreature != null ? KeyboardCreature.transform.position.x : 0f;
+            float x = position.x;
             if (x < 20f)
                 return "Get everyone onto the counter. Strong (red badge): walk into a teammate, press E to pick them up, " +
                        "point the mouse at the counter and press E to throw. Last, Tab to a Magnet on the counter, stand a few steps " +
@@ -120,7 +108,7 @@ namespace Picknick.Rooms
             AddCheckpoint(level, "Checkpoint Fridge", new Vector2(51.8f, 10.2f), new Vector2(3.4f, 2.4f));
 
             Visual(level, "Mouse Hole", new Vector2(57.7f, 9.75f), new Vector2(0.6f, 1.5f), new Color(0.15f, 0.1f, 0.08f), 0);
-            exit = AddZone(level, "Exit", new Vector2(56f, 10.25f), new Vector2(4f, 2.5f)).gameObject.AddComponent<ExitZone>();
+            AddExit(level, new Vector2(56f, 10.25f), new Vector2(4f, 2.5f));
             Tag(key.transform, new Vector2(0f, 0.45f), "key");
 
             Decorate(level);
@@ -167,70 +155,6 @@ namespace Picknick.Rooms
         {
             Decor(level, "Cabinet Door", new Vector2(x, 1.2f), new Vector2(2.6f, 2.8f), CabinetDoorColor, -2);
             Decor(level, "Cabinet Knob", new Vector2(x + 0.9f, 1.9f), new Vector2(0.15f, 0.15f), WoodColor, -2);
-        }
-
-        void Decor(Transform parent, string name, Vector2 center, Vector2 size, Color color, int order)
-        {
-            GameObject go = Visual(parent, name, Vector2.zero, size, color, order);
-            go.transform.position = center;
-            // Keep world size even under a scaled parent (props are scaled squares).
-            Vector3 parentScale = parent.lossyScale;
-            go.transform.localScale = new Vector3(size.x / parentScale.x, size.y / parentScale.y, 1f);
-        }
-
-        void Tag(Transform target, Vector2 offset, string text) => nameTags.Add((target, offset, text));
-
-        protected override void OnGUI()
-        {
-            DrawNameTags();
-            base.OnGUI();
-            if (exit == null) return;
-
-            if (exit.Cleared)
-            {
-                var style = new GUIStyle(HintStyle) { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                int seconds = Mathf.FloorToInt(exit.ClearTime);
-                GUI.Label(new Rect(0, Screen.height * 0.35f, Screen.width, 60), $"Room cleared! {seconds / 60}:{seconds % 60:00}", style);
-            }
-            else if (exit.Inside > 0)
-            {
-                GUI.Label(new Rect(12, Screen.height - 30, 400, 24), $"In the mouse hole: {exit.Inside}/{exit.Total}", HintStyle);
-            }
-        }
-
-        void DrawNameTags()
-        {
-            Camera cam = Camera.main;
-            if (cam == null) return;
-            tagStyle ??= new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Italic,
-                normal = { textColor = new Color(0.25f, 0.2f, 0.15f, 0.75f) },
-            };
-
-            foreach (var (target, offset, text) in nameTags)
-            {
-                if (target == null) continue;
-                Vector3 screen = cam.WorldToScreenPoint((Vector2)target.position + offset);
-                if (screen.z < 0f) continue;
-                GUI.Label(new Rect(screen.x - 60f, Screen.height - screen.y - 10f, 120f, 20f), text, tagStyle);
-            }
-        }
-
-        static Zone AddZone(Transform parent, string name, Vector2 center, Vector2 size)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.transform.position = center;
-            var zone = go.AddComponent<Zone>();
-            zone.size = size;
-            return zone;
-        }
-
-        static void AddCheckpoint(Transform parent, string name, Vector2 center, Vector2 size)
-        {
-            AddZone(parent, name, center, size).gameObject.AddComponent<Checkpoint>();
         }
     }
 }
