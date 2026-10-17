@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="Picknick.Runtime.csproj" />
+  <Project Path="Picknick.Editor.csproj" />
+</Solution>
