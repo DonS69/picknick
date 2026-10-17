@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.CameraRig;
 using Picknick.Creature;
@@ -27,10 +28,10 @@ namespace Picknick.Sandbox
             new Color(0.95f, 0.95f, 0.95f),
         };
 
-        static readonly Color GroundColor = new Color(0.55f, 0.53f, 0.50f);
-        static readonly Color CrateColor = new Color(0.80f, 0.62f, 0.40f);
-        static readonly Color HeavyColor = new Color(0.35f, 0.30f, 0.28f);
-        static readonly Color MetalColor = new Color(0.55f, 0.65f, 0.75f);
+        protected static readonly Color GroundColor = new Color(0.55f, 0.53f, 0.50f);
+        protected static readonly Color CrateColor = new Color(0.80f, 0.62f, 0.40f);
+        protected static readonly Color HeavyColor = new Color(0.35f, 0.30f, 0.28f);
+        protected static readonly Color MetalColor = new Color(0.55f, 0.65f, 0.75f);
 
         // Starting badges for creatures 1-4, as in Room 1 of the plan.
         static readonly AbilityType[] StartingAbilities =
@@ -40,6 +41,17 @@ namespace Picknick.Sandbox
 
         Sprite square;
         LocalInputRouter router;
+
+        protected IReadOnlyList<CreatureController> Creatures => router.Creatures;
+        protected CreatureController KeyboardCreature => router.KeyboardCreature;
+        protected virtual Vector2 SpawnOrigin => new Vector2(0f, 1f);
+        protected virtual float KillHeight => -6f;
+        protected virtual Color BackgroundColor => new Color(0.98f, 0.93f, 0.84f);
+
+        protected virtual string Hint =>
+            "Magnet: hold to pull blue metal or a teammate to you. In the air, or on fixed metal, it pulls YOU.\n" +
+            "Feather: hold jump in the air to glide. Ability grabs or drops a teammate.\n" +
+            "Strong: push the dark heavy can. Ability picks up a teammate, press again to throw.";
         Transform keyboardMarker;
 
         void Awake()
@@ -61,31 +73,78 @@ namespace Picknick.Sandbox
 
         GUIStyle hintStyle;
 
-        void OnGUI()
+        protected GUIStyle HintStyle => hintStyle;
+
+        protected virtual void OnGUI()
         {
-            hintStyle ??= new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(0.2f, 0.2f, 0.2f) } };
-            GUI.Label(new Rect(12, 8, 900, 110),
+            hintStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                normal = { textColor = new Color(0.2f, 0.2f, 0.2f) },
+                padding = new RectOffset(8, 8, 6, 6),
+            };
+            hintBackground ??= SolidTexture(new Color(1f, 0.97f, 0.9f, 0.9f));
+
+            // Panel behind the help text so it stays readable over walls.
+            var hint = new GUIContent(
                 "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature\n" +
                 "Gamepads: one per creature. Stick move, A jump, right stick aims, X or RT = ability, Y = swap\n" +
-                "Magnet: hold to pull metal (blue) or teammates. Heavier or fixed metal pulls YOU.\n" +
-                "Feather: hold jump in the air to glide. Ability grabs or drops a teammate.\n" +
-                "Strong: push the dark heavy can. Ability picks up a teammate, press again to throw.", hintStyle);
+                Hint);
+            float width = Mathf.Min(hintStyle.CalcSize(hint).x, Screen.width - 16f);
+            var hintRect = new Rect(8, 8, width, hintStyle.CalcHeight(hint, width));
+            GUI.DrawTexture(hintRect, hintBackground);
+            GUI.Label(hintRect, hint, hintStyle);
 
             Camera cam = Camera.main;
             if (cam == null) return;
+            labelStyle ??= new GUIStyle(hintStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, padding = new RectOffset() };
+            sideLabelStyle ??= new GUIStyle(labelStyle) { alignment = TextAnchor.MiddleRight };
+
             foreach (CreatureController creature in router.Creatures)
             {
                 var abilities = creature.GetComponent<CreatureAbilities>();
-                Vector3 screen = cam.WorldToScreenPoint(creature.transform.position + new Vector3(0f, 0.95f, 0f));
+                string label = abilities.Current.ToString();
+
+                // Someone standing on (or carried above) us would cover a label above our head,
+                // so put ours on the left side instead.
+                bool covered = HasCreatureAbove(creature);
+                Vector3 anchor = creature.transform.position + (covered ? new Vector3(-0.5f, 0f, 0f) : new Vector3(0f, 0.95f, 0f));
+                Vector3 screen = cam.WorldToScreenPoint(anchor);
                 if (screen.z < 0f) continue;
-                var rect = new Rect(screen.x - 40f, Screen.height - screen.y - 10f, 80f, 20f);
-                GUI.Label(rect, abilities.Current.ToString(), labelStyle ??= new GUIStyle(hintStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
+
+                float y = Screen.height - screen.y - 10f;
+                if (covered)
+                    GUI.Label(new Rect(screen.x - 84f, y, 80f, 20f), label, sideLabelStyle);
+                else
+                    GUI.Label(new Rect(screen.x - 40f, y, 80f, 20f), label, labelStyle);
             }
         }
 
+        bool HasCreatureAbove(CreatureController creature)
+        {
+            Vector2 me = creature.transform.position;
+            foreach (CreatureController other in router.Creatures)
+            {
+                if (other == creature) continue;
+                Vector2 offset = (Vector2)other.transform.position - me;
+                if (Mathf.Abs(offset.x) < 0.7f && offset.y > 0f && offset.y < 1.3f)
+                    return true;
+            }
+            return false;
+        }
+
+        static Texture2D SolidTexture(Color color)
+        {
+            var tex = new Texture2D(1, 1);
+            tex.SetPixel(0, 0, color);
+            tex.Apply();
+            return tex;
+        }
+
+        Texture2D hintBackground;
+        GUIStyle sideLabelStyle;
         GUIStyle labelStyle;
 
-        void BuildLevel()
+        protected virtual void BuildLevel()
         {
             var level = new GameObject("Level").transform;
 
@@ -119,14 +178,14 @@ namespace Picknick.Sandbox
             {
                 var go = new GameObject($"Creature {i + 1}");
                 go.transform.SetParent(root);
-                go.transform.position = new Vector2(i * 1.2f, 1f);
+                go.transform.position = SpawnOrigin + new Vector2(i * 1.2f, 0f);
 
                 go.AddComponent<Rigidbody2D>();
                 go.AddComponent<BoxCollider2D>();
                 CreatureController creature = go.AddComponent<CreatureController>();
                 if (tuning != null)
                     creature.ApplyTuning(tuning);
-                go.AddComponent<FallRespawn>().killHeight = -6f;
+                go.AddComponent<FallRespawn>().killHeight = KillHeight;
                 go.AddComponent<Magnetic>();
                 var abilities = go.AddComponent<CreatureAbilities>();
 
@@ -156,7 +215,7 @@ namespace Picknick.Sandbox
                 cam.transform.position = new Vector3(0f, 2f, -10f);
             }
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.98f, 0.93f, 0.84f);
+            cam.backgroundColor = BackgroundColor;
 
             SharedCamera shared = cam.GetComponent<SharedCamera>();
             if (shared == null)
@@ -173,14 +232,14 @@ namespace Picknick.Sandbox
             _ => Color.gray,
         };
 
-        GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
+        protected GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
         {
-            GameObject go = Visual(parent, name, center, size, color, -1);
+            GameObject go = Visual(parent, name, center, size, color, -3);
             go.AddComponent<BoxCollider2D>();
             return go;
         }
 
-        GameObject Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
+        protected GameObject Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
         {
             GameObject go = Visual(parent, name, center, size, color, 0);
             go.AddComponent<BoxCollider2D>();
@@ -191,7 +250,7 @@ namespace Picknick.Sandbox
             return go;
         }
 
-        GameObject Visual(Transform parent, string name, Vector2 localPos, Vector2 size, Color color, int order)
+        protected GameObject Visual(Transform parent, string name, Vector2 localPos, Vector2 size, Color color, int order)
         {
             var go = new GameObject(name);
             if (parent != null) go.transform.SetParent(parent, false);
