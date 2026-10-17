@@ -44,6 +44,16 @@ The room is simulated by the player who hosts; everyone else sends their input a
 
 To play across two PCs on the same network, the host shares their local IP address (for example `192.168.1.20`) and the others type it before Join. Over the internet this needs port forwarding until Steam is added (plan step 6).
 
+## Online play over Steam
+
+Uses Steam's test app (App ID 480, "Spacewar") until Picknick has its own Steam app. Steam must be running and logged in. Steam can't connect an account to itself, so testing needs a second PC with a different Steam account.
+
+1. Make a build to share: **File > Build Profiles > Windows > Build**, zip the output folder and send it to your friend (`steam_appid.txt` is copied in automatically).
+2. Host: press Play (or run the build), click **Host on Steam**. Click **Copy** next to "Your code" and send the code to your friend, or click **Invite Steam friends** (the Steam overlay only works in builds, not in the editor).
+3. Friend: run the build, paste the code and click **Join friend's code**, or accept the Steam invite while the game is open.
+
+Steam connects you peer to peer through its relays, so no port forwarding is needed. Vendored packages: `Packages/com.rlabrecque.steamworks.net` (Steamworks.NET 2025.165.0) and `Packages/com.community.netcode.transport.steamnetworkingsockets` (community Steam transport for Netcode, asmdef references updated for Netcode 2.x).
+
 ## Room 1: The Kitchen Counter
 
 Everyone has to end up in the mouse hole on top of the fridge, at the same time. Falling sends you back to your last checkpoint.
@@ -64,7 +74,7 @@ Assets/Picknick/
     Abilities/          Magnet, Feather, Strong (step 3)
     Puzzle/             Zone, Checkpoint, ExitZone, HoldDoor, MagnetLever, HookedItem, Hatch
     Rooms/              KitchenRoom (Room 1 graybox, built at runtime)
-    Net/                NetSession (host/join, input, snapshots), SyncedBody
+    Net/                NetSession (host/join over Steam or LAN, input, snapshots), SyncedBody, SteamService
   Editor/               Picknick.Editor assembly: menu items
   Scenes/ Prefabs/ Rooms/ Settings/
 ```
