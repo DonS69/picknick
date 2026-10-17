@@ -4,16 +4,17 @@ namespace Picknick.Abilities
 {
     /// <summary>
     /// Hold Action to pull the magnetic thing you aim at: metal or a teammate.
-    /// Mass rule: a lighter target flies to you, a heavier or fixed one pulls you to it
-    /// (a free grappling hook). Equal masses meet in the middle unless you're standing firm.
+    /// Standing on the ground you plant your feet and the target comes to you (heavy ones slowly).
+    /// In the air, or aiming at fixed metal, you fly to it instead: a free grappling hook.
+    /// Mass decides speed: a Feather zips over, a Strong teammate is a slow heave.
     /// Works while being carried, so a Feather can ferry a Magnet to grab something mid-air.
     /// </summary>
     public class MagnetAbility : Ability
     {
-        public float range = 6f;
+        public float range = 7f;
         public float coneAngle = 30f;
         [Tooltip("Strong enough to beat gravity, so grappling upwards works.")]
-        public float pullForce = 90f;
+        public float pullForce = 120f;
         public float maxPullSpeed = 12f;
         public float stopDistance = 1.1f;
 
@@ -21,6 +22,21 @@ namespace Picknick.Abilities
         LineRenderer beam;
 
         public override AbilityType Type => AbilityType.Magnet;
+
+        /// <summary>What we're pulling right now, if anything.</summary>
+        public Magnetic Target => target;
+
+        /// <summary>True if any active Magnet is pulling this object.</summary>
+        public static bool IsTargeted(Magnetic magnetic)
+        {
+            foreach (CreatureAbilities creature in CreatureAbilities.All)
+            {
+                MagnetAbility magnet = creature.Get<MagnetAbility>();
+                if (magnet != null && magnet.isActiveAndEnabled && magnet.target == magnetic)
+                    return true;
+            }
+            return false;
+        }
         public override float Mass => 1f;
 
         protected override void Awake()
@@ -76,10 +92,9 @@ namespace Picknick.Abilities
             float closingSpeed = Vector2.Dot(me.linearVelocity - targetVelocity, dir);
             if (closingSpeed > maxPullSpeed) return;
 
-            // Planted on the ground, a Magnet holds firm against anything not heavier than itself.
-            bool targetHeavier = !targetMoves || target.Body.mass > me.mass;
+            // Planted on the ground we hold firm; in the air (or on fixed metal) we get pulled too.
             // While carried (say, by a Feather) we can still pull things, but can't be pulled away.
-            bool pullSelf = !Creature.IsCarried && (targetHeavier || !Creature.IsGrounded);
+            bool pullSelf = !Creature.IsCarried && (!targetMoves || !Creature.IsGrounded);
 
             if (targetMoves)
             {

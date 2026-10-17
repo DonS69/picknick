@@ -9,7 +9,7 @@ namespace Picknick.Abilities
     public class FeatherAbility : CarryAbility
     {
         public float glideFallSpeed = 1.5f;
-        public float carryingFallSpeed = 4.5f;
+        public float carryingFallSpeed = 2.5f;
 
         public override AbilityType Type => AbilityType.Feather;
         public override float Mass => 0.5f;
