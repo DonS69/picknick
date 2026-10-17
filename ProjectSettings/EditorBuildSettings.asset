@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Picknick/Scenes/Room1_Kitchen.unity
+    guid: c853d81130958cd48bc6f47c12c4663b
   m_configObjects: {}
