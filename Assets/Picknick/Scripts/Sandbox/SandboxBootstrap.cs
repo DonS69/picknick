@@ -1,3 +1,4 @@
+using Picknick.Abilities;
 using Picknick.CameraRig;
 using Picknick.Creature;
 using UnityEngine;
@@ -6,7 +7,8 @@ namespace Picknick.Sandbox
 {
     /// <summary>
     /// Builds a graybox test level and four creatures at runtime, so the sandbox scene
-    /// needs nothing but this component. Used to tune movement and stacking (plan step 2).
+    /// needs nothing but this component. Used to tune movement, stacking and the three
+    /// abilities (plan steps 2 and 3).
     /// </summary>
     public class SandboxBootstrap : MonoBehaviour
     {
@@ -28,6 +30,13 @@ namespace Picknick.Sandbox
         static readonly Color GroundColor = new Color(0.55f, 0.53f, 0.50f);
         static readonly Color CrateColor = new Color(0.80f, 0.62f, 0.40f);
         static readonly Color HeavyColor = new Color(0.35f, 0.30f, 0.28f);
+        static readonly Color MetalColor = new Color(0.55f, 0.65f, 0.75f);
+
+        // Starting badges for creatures 1-4, as in Room 1 of the plan.
+        static readonly AbilityType[] StartingAbilities =
+        {
+            AbilityType.Strong, AbilityType.Feather, AbilityType.Magnet, AbilityType.Magnet,
+        };
 
         Sprite square;
         LocalInputRouter router;
@@ -55,11 +64,26 @@ namespace Picknick.Sandbox
         void OnGUI()
         {
             hintStyle ??= new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(0.2f, 0.2f, 0.2f) } };
-            GUI.Label(new Rect(12, 8, 700, 60),
-                "Keyboard: A/D or arrows move, Space/W jump, Tab switches creature (white marker)\n" +
-                "Gamepads: one per creature, stick/d-pad move, A jump\n" +
-                "Goal: get all four onto the high ledge. Crate helps, stacking on heads works too.", hintStyle);
+            GUI.Label(new Rect(12, 8, 900, 110),
+                "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature\n" +
+                "Gamepads: one per creature. Stick move, A jump, right stick aims, X or RT = ability, Y = swap\n" +
+                "Magnet: hold to pull metal (blue) or teammates. Heavier or fixed metal pulls YOU.\n" +
+                "Feather: hold jump in the air to glide. Ability grabs or drops a teammate.\n" +
+                "Strong: push the dark heavy can. Ability picks up a teammate, press again to throw.", hintStyle);
+
+            Camera cam = Camera.main;
+            if (cam == null) return;
+            foreach (CreatureController creature in router.Creatures)
+            {
+                var abilities = creature.GetComponent<CreatureAbilities>();
+                Vector3 screen = cam.WorldToScreenPoint(creature.transform.position + new Vector3(0f, 0.95f, 0f));
+                if (screen.z < 0f) continue;
+                var rect = new Rect(screen.x - 40f, Screen.height - screen.y - 10f, 80f, 20f);
+                GUI.Label(rect, abilities.Current.ToString(), labelStyle ??= new GUIStyle(hintStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
+            }
         }
+
+        GUIStyle labelStyle;
 
         void BuildLevel()
         {
@@ -74,11 +98,18 @@ namespace Picknick.Sandbox
             // Ledge, 2 units high: one creature can't reach it from another's head,
             // but two stacked can, or one standing on the crate.
             Block(level, "Ledge", new Vector2(13f, 1f), new Vector2(10f, 2f), GroundColor);
-            // Far ledge across a 4-unit gap: just out of jump range (a job for Feather later).
+            // Far ledge across a 4-unit gap: just out of jump range. Feather glides it,
+            // or a Magnet grapples the metal anchor hanging above the pit.
             Block(level, "Far Ledge", new Vector2(26f, 1f), new Vector2(8f, 2f), GroundColor);
+            Block(level, "Pit Anchor", new Vector2(20f, 6f), new Vector2(0.6f, 0.6f), MetalColor).AddComponent<Magnetic>();
+
+            // High shelf: reach it with a Strong throw, or grapple the anchor above it.
+            Block(level, "High Shelf", new Vector2(36f, 5f), new Vector2(6f, 0.6f), GroundColor);
+            Block(level, "Shelf Anchor", new Vector2(38f, 8f), new Vector2(0.6f, 0.6f), MetalColor).AddComponent<Magnetic>();
 
             Prop(level, "Crate", new Vector2(4f, 0.5f), new Vector2(1f, 1f), 1.5f, CrateColor);
-            Prop(level, "Heavy Can", new Vector2(-5f, 0.6f), new Vector2(1.2f, 1.2f), 12f, HeavyColor);
+            Prop(level, "Metal Crate", new Vector2(-2f, 0.5f), new Vector2(0.8f, 0.8f), 1f, MetalColor).AddComponent<Magnetic>();
+            Prop(level, "Heavy Can", new Vector2(-6f, 0.6f), new Vector2(1.2f, 1.2f), 4f, HeavyColor).AddComponent<Heavy>();
         }
 
         void SpawnCreatures()
@@ -96,11 +127,18 @@ namespace Picknick.Sandbox
                 if (tuning != null)
                     creature.ApplyTuning(tuning);
                 go.AddComponent<FallRespawn>().killHeight = -6f;
+                go.AddComponent<Magnetic>();
+                var abilities = go.AddComponent<CreatureAbilities>();
 
                 Color color = CreatureColors[i % CreatureColors.Length];
                 Visual(go.transform, "Body", Vector2.zero, new Vector2(0.8f, 0.8f), color, 0);
                 Visual(go.transform, "Eye L", new Vector2(-0.15f, 0.12f), new Vector2(0.12f, 0.18f), Color.black, 1);
                 Visual(go.transform, "Eye R", new Vector2(0.15f, 0.12f), new Vector2(0.12f, 0.18f), Color.black, 1);
+
+                var badge = Visual(go.transform, "Badge", new Vector2(0f, -0.2f), new Vector2(0.36f, 0.16f), Color.white, 1)
+                    .GetComponent<SpriteRenderer>();
+                abilities.Changed += type => badge.color = BadgeColor(type);
+                abilities.Set(StartingAbilities[i % StartingAbilities.Length]);
 
                 router.Creatures.Add(creature);
             }
@@ -127,13 +165,22 @@ namespace Picknick.Sandbox
                 shared.Targets.Add(creature.transform);
         }
 
-        void Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
+        static Color BadgeColor(AbilityType type) => type switch
+        {
+            AbilityType.Magnet => new Color(0.3f, 0.55f, 0.95f),
+            AbilityType.Feather => Color.white,
+            AbilityType.Strong => new Color(0.9f, 0.25f, 0.2f),
+            _ => Color.gray,
+        };
+
+        GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
         {
             GameObject go = Visual(parent, name, center, size, color, -1);
             go.AddComponent<BoxCollider2D>();
+            return go;
         }
 
-        void Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
+        GameObject Prop(Transform parent, string name, Vector2 center, Vector2 size, float mass, Color color)
         {
             GameObject go = Visual(parent, name, center, size, color, 0);
             go.AddComponent<BoxCollider2D>();
@@ -141,6 +188,7 @@ namespace Picknick.Sandbox
             body.mass = mass;
             body.gravityScale = 3f;
             body.freezeRotation = true;
+            return go;
         }
 
         GameObject Visual(Transform parent, string name, Vector2 localPos, Vector2 size, Color color, int order)

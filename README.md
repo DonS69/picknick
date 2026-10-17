@@ -3,7 +3,7 @@
 2D cartoon co-op puzzle game: tiny creatures trapped in a giant house, each with a swappable ability.
 Unity + C#, online co-op over Steam. The design and build plan live in [`docs/prototype-plan.md`](docs/prototype-plan.md).
 
-This repository currently covers **plan steps 1–2**: project setup and one creature that runs, jumps and stacks on other creatures, in a graybox sandbox with four creatures.
+This repository currently covers **plan steps 1–3**: project setup, creatures that run, jump and stack on each other, and the three abilities (Magnet, Feather, Strong) with badge swapping, in a graybox sandbox with four creatures.
 
 ## Open the project
 
@@ -15,12 +15,22 @@ This repository currently covers **plan steps 1–2**: project setup and one cre
 
 ## Sandbox controls
 
-| Device | Move | Jump | Other |
-|---|---|---|---|
-| Keyboard | A/D or arrows | Space / W / Up | Tab switches which creature you control (white marker) |
-| Gamepad (one per creature) | Left stick / d-pad | South button (A / Cross) | |
+| Device | Move | Jump | Aim | Ability | Swap badge | Other |
+|---|---|---|---|---|---|---|
+| Keyboard + mouse | A/D or arrows | Space / W / Up | Mouse | E or left click | Q | Tab switches creature (white marker) |
+| Gamepad (one per creature) | Left stick / d-pad | South (A / Cross) | Right stick | West (X / Square) or RT | North (Y / Triangle) | |
 
-The sandbox goal is to get all four creatures onto the high ledge. A single creature can't jump it from another's head, but two stacked can, and so can one standing on the crate. The far ledge across the pit is deliberately just out of jump range (a job for Feather later).
+Starting badges: creature 1 Strong, 2 Feather, 3 and 4 Magnet. Swapping trades badges with the nearest teammate, so the room always has the same set of abilities.
+
+| Ability | What it does |
+|---|---|
+| Magnet (mass 1) | Hold to pull the blue metal or a teammate you aim at. A lighter target flies to you; a heavier or fixed one pulls you to it (grappling hook). Works while being carried. |
+| Feather (mass 0.5) | Hold Jump in the air to glide. Ability grabs or drops a nearby teammate; carrying makes you sink faster. |
+| Strong (mass 2) | The only one who can push the dark Heavy can. Ability picks up a teammate; press again to throw where you aim. Light teammates fly farther. |
+
+A carried creature can wriggle free by pressing Jump.
+
+Things to try: get all four onto the high ledge (stack, use the crate, or get thrown). Cross the pit to the far ledge (glide, grapple the anchor above the pit, or get pulled across by a Magnet). Reach the high shelf at the far right (Strong throw, or grapple its anchor).
 
 Tune movement by creating **Assets > Create > Picknick > Creature Tuning**, assigning it to the `Sandbox` object's `Tuning` field, and changing values in Play mode.
 
