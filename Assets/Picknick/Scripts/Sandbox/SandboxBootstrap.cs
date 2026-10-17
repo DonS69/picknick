@@ -43,6 +43,7 @@ namespace Picknick.Sandbox
         LocalInputRouter router;
 
         protected IReadOnlyList<CreatureController> Creatures => router.Creatures;
+        protected CreatureController KeyboardCreature => router.KeyboardCreature;
         protected virtual Vector2 SpawnOrigin => new Vector2(0f, 1f);
         protected virtual float KillHeight => -6f;
         protected virtual Color BackgroundColor => new Color(0.98f, 0.93f, 0.84f);

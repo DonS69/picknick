@@ -35,7 +35,25 @@ namespace Picknick.Rooms
 
         protected override string Hint =>
             "Room 1: The Kitchen Counter. Get all four creatures into the mouse hole on top of the fridge (far right).\n" +
-            "Dark can = Strong only. Blue = metal for Magnets. The cupboard door opens while Strong stands next to it.";
+            "HOW TO: " + SectionHint();
+
+        /// <summary>A step-by-step tip for the section the keyboard creature is in.</summary>
+        string SectionHint()
+        {
+            float x = KeyboardCreature != null ? KeyboardCreature.transform.position.x : 0f;
+            if (x < 20f)
+                return "Get everyone onto the counter. Strong (red badge): walk into a teammate, press E to pick them up, " +
+                       "point the mouse at the counter and press E to throw. Last, Tab to a Magnet on the counter, stand a few steps " +
+                       "back from the edge, point at Strong below and hold left click to heave it up.";
+            if (x < 30f)
+                return "Cross the sink. Feather (white badge): jump and HOLD Space to glide over. Magnets (blue badge): hold left click " +
+                       "on the faucet to swing across, then from the far side hold left click on a teammate to pull them over.";
+            if (x < 44f)
+                return "Strong: stand right next to the cupboard door to hold it open while the others walk through. " +
+                       "Then a Magnet on the far side holds left click on the spoon until it turns green: the door stays open for Strong.";
+            return "Stand on the cookie box (or a friend) and hold left click on the key with a Magnet to knock it down. " +
+                   "Magnets: grapple the fridge magnet to get on top, then pull the others up and pull the key to the hatch.";
+        }
 
         protected override void BuildLevel()
         {
