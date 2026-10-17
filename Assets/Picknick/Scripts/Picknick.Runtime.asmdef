@@ -1,0 +1,8 @@
+{
+    "name": "Picknick.Runtime",
+    "rootNamespace": "Picknick",
+    "references": [
+        "Unity.InputSystem"
+    ],
+    "autoReferenced": true
+}

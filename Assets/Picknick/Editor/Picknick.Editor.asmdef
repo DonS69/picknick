@@ -1,0 +1,10 @@
+{
+    "name": "Picknick.Editor",
+    "rootNamespace": "Picknick.EditorTools",
+    "references": [
+        "Picknick.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}
