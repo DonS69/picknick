@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.Creature;
@@ -8,6 +9,7 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace Picknick.Net
 {
@@ -18,6 +20,8 @@ namespace Picknick.Net
     /// Each player controls one creature; Tab switches to the next creature nobody controls.
     /// Two ways to connect: Steam (peer to peer by Steam ID, works over the internet) or
     /// LAN / this PC (IP address, also what Multiplayer Play Mode windows use).
+    /// Lives on the GameFlow object, so a session survives moving from room to room. Each
+    /// snapshot says which room the host is in; a guest in a different one loads it.
     /// </summary>
     public class NetSession : MonoBehaviour
     {
@@ -25,6 +29,8 @@ namespace Picknick.Net
         const string SwitchMessage = "picknick.switch";
         const string SnapshotMessage = "picknick.snapshot";
         const ulong NoOwner = ulong.MaxValue;
+        const int MaxCreatures = 8;
+        public const int MaxPlayers = 4;
 
         public string address = "127.0.0.1";
         public ushort port = 7777;
@@ -33,39 +39,114 @@ namespace Picknick.Net
 
         LocalInputRouter router;
         List<CreatureController> creatures;
+        bool roomReady;
+        // Bumped by the host on every room load (restarts too), so guests know to reload.
+        int roomLoad;
+        int guestSceneIndex = -1;
+        int guestRoomLoad = -1;
         NetworkManager network;
         UnityTransport transport;
         SteamNetworkingSocketsTransport steamTransport;
         SteamService steam;
         bool overSteam;
-        string friendCode = "";
-        ulong[] owners;
-        CreatureInput[] pending;
+        readonly ulong[] owners = new ulong[MaxCreatures];
+        readonly CreatureInput[] pending = new CreatureInput[MaxCreatures];
         int fixedSteps;
         bool leaveRequested;
         string status = "";
         GUIStyle panelStyle;
 
-        bool Online => network != null && network.IsListening;
-        bool IsHost => Online && network.IsServer;
+        public bool Online => network != null && network.IsListening;
+        public bool IsHost => Online && network.IsServer;
+        public bool CanChangeRoom => !Online || IsHost;
+        public SteamService Steam => steam;
+        public string Status => status;
 
-        public void Init(LocalInputRouter inputRouter)
-        {
-            router = inputRouter;
-            creatures = inputRouter.Creatures;
-        }
+        /// <summary>A guest lost the connection to the host (or never got in).</summary>
+        public event Action LostHost;
+
+        int CreatureCount => creatures != null ? Mathf.Min(creatures.Count, MaxCreatures) : 0;
 
         void Awake()
         {
             steam = gameObject.AddComponent<SteamService>();
             steam.JoinHost += hostId => { if (!Online) StartSteam(false, hostId); };
+            ClearOwners();
         }
 
-        void Start()
+        // ---------- Rooms ----------
+
+        /// <summary>Called by a room as it is built. Online, the session carries straight on in it.</summary>
+        public void AttachRoom(LocalInputRouter inputRouter)
         {
-            owners = new ulong[creatures.Count];
-            pending = new CreatureInput[creatures.Count];
-            ClearOwners();
+            router = inputRouter;
+            creatures = inputRouter.Creatures;
+            roomReady = true;
+            for (int i = CreatureCount; i < MaxCreatures; i++)
+            {
+                owners[i] = NoOwner;
+                pending[i] = default;
+            }
+            if (!Online) return;
+
+            router.enabled = false;
+            if (IsHost)
+            {
+                foreach (ulong id in network.ConnectedClientsIds)
+                    AssignFreeCreature(id);
+            }
+            else
+            {
+                foreach (CreatureController creature in creatures)
+                    creature.SetInput(default);
+            }
+        }
+
+        public void DetachRoom(LocalInputRouter inputRouter)
+        {
+            if (router != inputRouter) return;
+            router = null;
+            creatures = null;
+            roomReady = false;
+        }
+
+        /// <summary>The host is about to load a room: guests will follow once snapshots say so.</summary>
+        public void RoomLoading()
+        {
+            roomLoad++;
+            roomReady = false;
+        }
+
+        // ---------- Called by the menu ----------
+
+        public bool HostSteam()
+        {
+            StartSteam(true);
+            return Online;
+        }
+
+        public void JoinSteam(string code) => StartSteam(false, ParseCode(code));
+
+        public bool HostLan()
+        {
+            StartLan(true);
+            return Online;
+        }
+
+        public void JoinLan() => StartLan(false);
+
+        public string Address
+        {
+            get => address;
+            set => address = value;
+        }
+
+        /// <summary>Stop playing online (hosting ends the session for everyone).</summary>
+        public void Leave()
+        {
+            leaveRequested = false;
+            status = "";
+            GoOffline();
         }
 
         void Update()
@@ -75,7 +156,7 @@ namespace Picknick.Net
                 leaveRequested = false;
                 GoOffline();
             }
-            if (!Online) return;
+            if (!Online || !roomReady) return;
 
             int mine = CreatureOf(network.LocalClientId);
             if (mine >= 0) router.keyboardIndex = mine;
@@ -100,7 +181,7 @@ namespace Picknick.Net
 
         void FixedUpdate()
         {
-            if (!IsHost) return;
+            if (!IsHost || !roomReady) return;
             if (++fixedSteps % Mathf.Max(1, snapshotInterval) == 0)
                 SendSnapshot();
         }
@@ -140,7 +221,7 @@ namespace Picknick.Net
             StartOnline(host);
             if (host && Online)
             {
-                steam.CreateLobby(owners.Length);
+                steam.CreateLobby(MaxPlayers);
                 status = "Hosting on Steam. Invite friends, or send them your code.";
             }
             else if (!host && Online)
@@ -185,12 +266,15 @@ namespace Picknick.Net
                 messaging.RegisterNamedMessageHandler(SnapshotMessage, OnSnapshot);
                 Authority.IsSimulating = false;
                 Physics2D.simulationMode = SimulationMode2D.Script;
-                foreach (CreatureController creature in creatures)
-                    creature.SetInput(default);
-                status = $"Joining {address}...";
+                guestSceneIndex = -1;
+                guestRoomLoad = -1;
+                if (creatures != null)
+                    foreach (CreatureController creature in creatures)
+                        creature.SetInput(default);
+                if (!overSteam) status = $"Joining {address}...";
             }
 
-            router.enabled = false;
+            if (router != null) router.enabled = false;
         }
 
         /// <summary>
@@ -200,6 +284,7 @@ namespace Picknick.Net
         void CreateNetworkManager()
         {
             var go = new GameObject("NetworkManager");
+            DontDestroyOnLoad(go);
             transport = go.AddComponent<UnityTransport>();
             steamTransport = go.AddComponent<SteamNetworkingSocketsTransport>();
             network = go.AddComponent<NetworkManager>();
@@ -225,7 +310,7 @@ namespace Picknick.Net
             foreach (SyncedBody body in SyncedBody.All)
                 body.ClearTarget();
             ClearOwners();
-            router.enabled = true;
+            if (router != null) router.enabled = true;
         }
 
         void OnDestroy()
@@ -252,15 +337,15 @@ namespace Picknick.Net
             }
 
             // We lost the host (or never reached it).
-            status = "Disconnected from the host.";
+            status = guestRoomLoad >= 0 ? "The host left the game." : "Couldn't reach the host. Check the code and try again.";
             leaveRequested = true;
+            LostHost?.Invoke();
         }
 
         // ---------- Creatures and owners (host decides) ----------
 
         void ClearOwners()
         {
-            if (owners == null) return;
             for (int i = 0; i < owners.Length; i++)
             {
                 owners[i] = NoOwner;
@@ -270,8 +355,7 @@ namespace Picknick.Net
 
         int CreatureOf(ulong player)
         {
-            if (owners == null) return -1;
-            for (int i = 0; i < owners.Length; i++)
+            for (int i = 0; i < CreatureCount; i++)
                 if (owners[i] == player) return i;
             return -1;
         }
@@ -279,7 +363,7 @@ namespace Picknick.Net
         void AssignFreeCreature(ulong player)
         {
             if (CreatureOf(player) >= 0) return;
-            for (int i = 0; i < owners.Length; i++)
+            for (int i = 0; i < CreatureCount; i++)
             {
                 if (owners[i] != NoOwner) continue;
                 owners[i] = player;
@@ -289,10 +373,12 @@ namespace Picknick.Net
 
         void SwitchCreature(ulong player)
         {
+            int count = CreatureCount;
+            if (count == 0) return;
             int current = CreatureOf(player);
-            for (int step = 1; step <= owners.Length; step++)
+            for (int step = 1; step <= count; step++)
             {
-                int next = ((current < 0 ? -1 : current) + step + owners.Length) % owners.Length;
+                int next = ((current < 0 ? -1 : current) + step + count) % count;
                 if (owners[next] != NoOwner) continue;
                 if (current >= 0)
                 {
@@ -331,7 +417,7 @@ namespace Picknick.Net
             reader.ReadValueSafe(out float move);
             reader.ReadValueSafe(out byte buttons);
             reader.ReadValueSafe(out Vector2 aim);
-            if (creature < 0 || creature >= owners.Length || owners[creature] != sender)
+            if (creature < 0 || creature >= CreatureCount || owners[creature] != sender)
                 return;
 
             // Keep the latest held state, but never lose a press that arrives between frames.
@@ -354,10 +440,12 @@ namespace Picknick.Net
                 if (id != network.LocalClientId) clients.Add(id);
             if (clients.Count == 0) return;
 
-            int size = 16 + creatures.Count * 16 + SyncedBody.All.Count * 24;
+            int size = 24 + creatures.Count * 16 + SyncedBody.All.Count * 24;
             var writer = new FastBufferWriter(size, Allocator.Temp);
             try
             {
+                writer.WriteValueSafe(SceneManager.GetActiveScene().buildIndex);
+                writer.WriteValueSafe(roomLoad);
                 writer.WriteValueSafe(creatures.Count);
                 for (int i = 0; i < creatures.Count; i++)
                 {
@@ -383,10 +471,24 @@ namespace Picknick.Net
 
         void OnSnapshot(ulong sender, FastBufferReader reader)
         {
+            reader.ReadValueSafe(out int sceneIndex);
+            reader.ReadValueSafe(out int load);
+            if (sceneIndex != guestSceneIndex || load != guestRoomLoad)
+            {
+                // The host is in another room (or restarted this one): build the same one here.
+                guestSceneIndex = sceneIndex;
+                guestRoomLoad = load;
+                roomReady = false;
+                status = "Connected. Tab switches to a free creature.";
+                SceneManager.LoadScene(sceneIndex);
+                return;
+            }
+            if (!roomReady) return;
+
             reader.ReadValueSafe(out int creatureCount);
             if (creatureCount != creatures.Count)
             {
-                status = "The host is playing a different room. Open the same scene on both.";
+                status = "The host's game is a different version. Make sure you both have the same build.";
                 return;
             }
 
@@ -441,57 +543,30 @@ namespace Picknick.Net
 
         // ---------- UI ----------
 
+        /// <summary>Online, a small panel in the room shows who's here, your code and Leave.
+        /// Hosting and joining happen in the main menu.</summary>
         void OnGUI()
         {
+            if (!Online || router == null) return;
+
             panelStyle ??= new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(10, 10, 8, 8) };
-            var area = new Rect(Screen.width - 370, Screen.height - 230, 360, 220);
+            var area = new Rect(Screen.width - 370, Screen.height - 170, 360, 160);
             GUILayout.BeginArea(area, panelStyle);
 
-            if (!Online)
+            string how = overSteam ? "on Steam" : "on LAN";
+            GUILayout.Label(IsHost ? $"Hosting {how}: {network.ConnectedClientsIds.Count} player(s)" : $"Online {how}");
+            if (IsHost && overSteam)
             {
-                if (steam.Ready)
-                {
-                    GUILayout.Label($"Steam: {steam.MyName}");
-                    if (GUILayout.Button("Host on Steam")) StartSteam(true);
-                    GUILayout.BeginHorizontal();
-                    friendCode = GUILayout.TextField(friendCode, GUILayout.Width(200));
-                    if (GUILayout.Button("Join friend's code")) StartSteam(false, ParseCode(friendCode));
-                    GUILayout.EndHorizontal();
-                }
-                else
-                {
-                    GUILayout.Label(steam.Problem);
-                }
-
-                GUILayout.Space(6);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("LAN / this PC", GUILayout.Width(90));
-                address = GUILayout.TextField(address);
+                GUILayout.Label($"Your code: {steam.MySteamId}");
+                if (GUILayout.Button("Copy", GUILayout.Width(60))) GUIUtility.systemCopyBuffer = steam.MySteamId.ToString();
                 GUILayout.EndHorizontal();
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Host LAN")) StartLan(true);
-                if (GUILayout.Button("Join LAN")) StartLan(false);
-                GUILayout.EndHorizontal();
+                GUI.enabled = steam.CanInvite;
+                if (GUILayout.Button("Invite Steam friends")) steam.OpenInviteDialog();
+                GUI.enabled = true;
             }
-            else
-            {
-                string how = overSteam ? "on Steam" : "on LAN";
-                GUILayout.Label(IsHost ? $"Hosting {how}: {network.ConnectedClientsIds.Count} player(s)" : $"Online {how}");
-                if (IsHost && overSteam)
-                {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label($"Your code: {steam.MySteamId}");
-                    if (GUILayout.Button("Copy", GUILayout.Width(60))) GUIUtility.systemCopyBuffer = steam.MySteamId.ToString();
-                    GUILayout.EndHorizontal();
-                    GUI.enabled = steam.CanInvite;
-                    if (GUILayout.Button("Invite Steam friends")) steam.OpenInviteDialog();
-                    GUI.enabled = true;
-                }
-                int mine = CreatureOf(network.LocalClientId);
-                GUILayout.Label(mine >= 0 ? $"You are creature {mine + 1}. Tab = switch to a free creature." : "Waiting for a creature...");
-                if (GUILayout.Button("Leave")) leaveRequested = true;
-            }
-
+            int mine = CreatureOf(network.LocalClientId);
+            GUILayout.Label(mine >= 0 ? $"You are creature {mine + 1}. Tab = switch to a free creature." : "Waiting for a creature...");
             if (status.Length > 0) GUILayout.Label(status);
             GUILayout.EndArea();
         }

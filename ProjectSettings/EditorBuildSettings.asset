@@ -6,6 +6,18 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Picknick/Scenes/Menu.unity
+    guid: 210f02e87adff2a40b16eb86c8614504
+  - enabled: 1
     path: Assets/Picknick/Scenes/Room1_Kitchen.unity
     guid: c853d81130958cd48bc6f47c12c4663b
+  - enabled: 1
+    path: Assets/Picknick/Scenes/Room2_Bathroom.unity
+    guid: 6c699a09361f0e4459329879fadd60e4
+  - enabled: 1
+    path: Assets/Picknick/Scenes/Room3_Bookshelf.unity
+    guid: d4b63a33521b9be4aafc96a4d7a9ffc6
+  - enabled: 1
+    path: Assets/Picknick/Scenes/Sandbox.unity
+    guid: 7228bba054d451e46b7459d24ad59afb
   m_configObjects: {}

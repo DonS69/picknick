@@ -4,13 +4,15 @@ using UnityEngine;
 namespace Picknick.Puzzle
 {
     /// <summary>
-    /// A heavy door that opens only while a Strong creature stands in its hold zone,
-    /// and slams shut the moment they step out. Latching (e.g. by a lever) keeps it open.
+    /// A heavy door that opens only while a Strong creature stands in its hold zone
+    /// (or while all of its buttons are pressed), and slams shut the moment that stops.
+    /// Latching (e.g. by a lever) keeps it open.
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     public class HoldDoor : MonoBehaviour
     {
         public Zone holdZone;
+        public PressurePlate[] plates;
         public float openHeight = 2.6f;
         public float openSpeed = 3f;
         public float slamSpeed = 15f;
@@ -30,10 +32,18 @@ namespace Picknick.Puzzle
 
         void FixedUpdate()
         {
-            bool open = Latched || StrongHolding();
+            bool open = Latched || StrongHolding() || PlatesPressed();
             float speed = open ? openSpeed : slamSpeed;
             openAmount = Mathf.MoveTowards(openAmount, open ? 1f : 0f, speed / openHeight * Time.fixedDeltaTime);
             body.MovePosition(closedPosition + Vector2.up * (openAmount * openHeight));
+        }
+
+        bool PlatesPressed()
+        {
+            if (plates == null || plates.Length == 0) return false;
+            foreach (PressurePlate plate in plates)
+                if (plate == null || !plate.Pressed) return false;
+            return true;
         }
 
         bool StrongHolding()

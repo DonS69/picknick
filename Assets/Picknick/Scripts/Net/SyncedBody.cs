@@ -20,6 +20,9 @@ namespace Picknick.Net
         float receivedAt;
         bool hasTarget;
 
+        /// <summary>The physics body, or null for objects that only have a transform (buttons).</summary>
+        public Rigidbody2D Body => body;
+
         void Awake()
         {
             body = GetComponent<Rigidbody2D>();

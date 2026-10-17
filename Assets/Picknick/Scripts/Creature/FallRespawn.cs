@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Picknick.Creature
@@ -8,6 +9,8 @@ namespace Picknick.Creature
     [RequireComponent(typeof(Rigidbody2D))]
     public class FallRespawn : MonoBehaviour
     {
+        public static readonly List<FallRespawn> All = new List<FallRespawn>();
+
         public float killHeight = -10f;
         public Vector2 checkpoint;
 
@@ -18,6 +21,9 @@ namespace Picknick.Creature
             body = GetComponent<Rigidbody2D>();
             checkpoint = transform.position;
         }
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
 
         void FixedUpdate()
         {

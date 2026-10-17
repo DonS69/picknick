@@ -1,6 +1,6 @@
 ﻿<Solution>
-  <Project Path="com.rlabrecque.steamworks.net.csproj" />
   <Project Path="Picknick.Runtime.csproj" />
+  <Project Path="com.rlabrecque.steamworks.net.csproj" />
   <Project Path="com.rlabrecque.steamworks.net.editor.csproj" />
   <Project Path="Picknick.Editor.csproj" />
   <Project Path="SteamNetworkingSockets Transport for Netcode for GameObjects.csproj" />
