@@ -4,7 +4,9 @@
     "references": [
         "Unity.InputSystem",
         "Unity.Netcode.Runtime",
-        "Unity.Collections"
+        "Unity.Collections",
+        "com.rlabrecque.steamworks.net",
+        "SteamNetworkingSockets Transport for Netcode for GameObjects"
     ],
     "autoReferenced": true
 }

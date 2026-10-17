@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.Creature;
+using Netcode.Transports;
 using Picknick.Sandbox;
 using Unity.Collections;
 using Unity.Netcode;
@@ -15,6 +16,8 @@ namespace Picknick.Net
     /// sends their input to the host and shows the snapshots the host sends back.
     /// Every peer builds the same room locally, so nothing has to be spawned over the network.
     /// Each player controls one creature; Tab switches to the next creature nobody controls.
+    /// Two ways to connect: Steam (peer to peer by Steam ID, works over the internet) or
+    /// LAN / this PC (IP address, also what Multiplayer Play Mode windows use).
     /// </summary>
     public class NetSession : MonoBehaviour
     {
@@ -32,6 +35,10 @@ namespace Picknick.Net
         List<CreatureController> creatures;
         NetworkManager network;
         UnityTransport transport;
+        SteamNetworkingSocketsTransport steamTransport;
+        SteamService steam;
+        bool overSteam;
+        string friendCode = "";
         ulong[] owners;
         CreatureInput[] pending;
         int fixedSteps;
@@ -46,6 +53,12 @@ namespace Picknick.Net
         {
             router = inputRouter;
             creatures = inputRouter.Creatures;
+        }
+
+        void Awake()
+        {
+            steam = gameObject.AddComponent<SteamService>();
+            steam.JoinHost += hostId => { if (!Online) StartSteam(false, hostId); };
         }
 
         void Start()
@@ -94,17 +107,62 @@ namespace Picknick.Net
 
         // ---------- Starting and stopping ----------
 
-        void StartOnline(bool host)
+        void StartLan(bool host)
+        {
+            if (!PrepareNetworkManager()) return;
+            network.NetworkConfig.NetworkTransport = transport;
+            transport.SetConnectionData(address, port, host ? "0.0.0.0" : null);
+            overSteam = false;
+            StartOnline(host);
+        }
+
+        void StartSteam(bool host, ulong hostSteamId = 0)
+        {
+            if (!steam.Ready)
+            {
+                status = steam.Problem;
+                return;
+            }
+            if (!host && hostSteamId == 0)
+            {
+                status = "Paste your friend's code first.";
+                return;
+            }
+            if (!host && hostSteamId == steam.MySteamId)
+            {
+                status = "That's your own code. Steam can't connect you to yourself; use LAN to test on one PC.";
+                return;
+            }
+            if (!PrepareNetworkManager()) return;
+            network.NetworkConfig.NetworkTransport = steamTransport;
+            steamTransport.ConnectToSteamID = hostSteamId;
+            overSteam = true;
+            StartOnline(host);
+            if (host && Online)
+            {
+                steam.CreateLobby(owners.Length);
+                status = "Hosting on Steam. Invite friends, or send them your code.";
+            }
+            else if (!host && Online)
+            {
+                status = "Joining your friend on Steam...";
+            }
+        }
+
+        bool PrepareNetworkManager()
         {
             if (network == null)
                 CreateNetworkManager();
             if (network.IsListening || network.ShutdownInProgress)
             {
                 status = "Still closing the last session, try again in a moment.";
-                return;
+                return false;
             }
-            transport.SetConnectionData(address, port, host ? "0.0.0.0" : null);
+            return true;
+        }
 
+        void StartOnline(bool host)
+        {
             ClearOwners();
             bool started = host ? network.StartHost() : network.StartClient();
             if (!started)
@@ -143,6 +201,7 @@ namespace Picknick.Net
         {
             var go = new GameObject("NetworkManager");
             transport = go.AddComponent<UnityTransport>();
+            steamTransport = go.AddComponent<SteamNetworkingSocketsTransport>();
             network = go.AddComponent<NetworkManager>();
             network.NetworkConfig = new NetworkConfig
             {
@@ -159,6 +218,7 @@ namespace Picknick.Net
             // Netcode may already have shut itself down (e.g. after a failed join).
             if (network != null && network.IsListening && !network.ShutdownInProgress)
                 network.Shutdown();
+            steam.LeaveLobby();
 
             Authority.IsSimulating = true;
             Physics2D.simulationMode = SimulationMode2D.FixedUpdate;
@@ -384,32 +444,59 @@ namespace Picknick.Net
         void OnGUI()
         {
             panelStyle ??= new GUIStyle(GUI.skin.box) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(10, 10, 8, 8) };
-            var area = new Rect(Screen.width - 330, Screen.height - 150, 320, 140);
+            var area = new Rect(Screen.width - 370, Screen.height - 230, 360, 220);
             GUILayout.BeginArea(area, panelStyle);
 
             if (!Online)
             {
-                GUILayout.Label("Online play");
+                if (steam.Ready)
+                {
+                    GUILayout.Label($"Steam: {steam.MyName}");
+                    if (GUILayout.Button("Host on Steam")) StartSteam(true);
+                    GUILayout.BeginHorizontal();
+                    friendCode = GUILayout.TextField(friendCode, GUILayout.Width(200));
+                    if (GUILayout.Button("Join friend's code")) StartSteam(false, ParseCode(friendCode));
+                    GUILayout.EndHorizontal();
+                }
+                else
+                {
+                    GUILayout.Label(steam.Problem);
+                }
+
+                GUILayout.Space(6);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Host address", GUILayout.Width(90));
+                GUILayout.Label("LAN / this PC", GUILayout.Width(90));
                 address = GUILayout.TextField(address);
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Host game")) StartOnline(true);
-                if (GUILayout.Button("Join game")) StartOnline(false);
+                if (GUILayout.Button("Host LAN")) StartLan(true);
+                if (GUILayout.Button("Join LAN")) StartLan(false);
                 GUILayout.EndHorizontal();
-                if (status.Length > 0) GUILayout.Label(status);
             }
             else
             {
-                GUILayout.Label(IsHost ? $"Hosting: {network.ConnectedClientsIds.Count} player(s)" : "Online (joined)");
+                string how = overSteam ? "on Steam" : "on LAN";
+                GUILayout.Label(IsHost ? $"Hosting {how}: {network.ConnectedClientsIds.Count} player(s)" : $"Online {how}");
+                if (IsHost && overSteam)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"Your code: {steam.MySteamId}");
+                    if (GUILayout.Button("Copy", GUILayout.Width(60))) GUIUtility.systemCopyBuffer = steam.MySteamId.ToString();
+                    GUILayout.EndHorizontal();
+                    GUI.enabled = steam.CanInvite;
+                    if (GUILayout.Button("Invite Steam friends")) steam.OpenInviteDialog();
+                    GUI.enabled = true;
+                }
                 int mine = CreatureOf(network.LocalClientId);
                 GUILayout.Label(mine >= 0 ? $"You are creature {mine + 1}. Tab = switch to a free creature." : "Waiting for a creature...");
-                if (status.Length > 0) GUILayout.Label(status);
                 if (GUILayout.Button("Leave")) leaveRequested = true;
             }
 
+            if (status.Length > 0) GUILayout.Label(status);
             GUILayout.EndArea();
         }
+
+        static ulong ParseCode(string code) =>
+            ulong.TryParse(code.Trim(), out ulong id) ? id : 0;
     }
 }
