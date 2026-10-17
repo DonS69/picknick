@@ -31,25 +31,37 @@ namespace Picknick.Sandbox
                 if (i < pads.Count)
                     Merge(ref input, ReadGamepad(pads[i]));
                 if (kb != null && i == keyboardIndex % Creatures.Count)
-                    Merge(ref input, ReadKeyboard(kb));
+                    Merge(ref input, ReadKeyboard(kb, Mouse.current, Creatures[i].transform.position));
                 Creatures[i].SetInput(input);
             }
         }
 
-        static CreatureInput ReadKeyboard(Keyboard kb)
+        static CreatureInput ReadKeyboard(Keyboard kb, Mouse mouse, Vector3 creaturePosition)
         {
             float move = 0f;
             if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) move -= 1f;
             if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move += 1f;
+
+            // Aim with the mouse: direction from the creature to the cursor.
+            Vector2 aim = new Vector2(move, 0f);
+            Camera cam = Camera.main;
+            if (mouse != null && cam != null)
+            {
+                Vector3 cursor = cam.ScreenToWorldPoint(mouse.position.ReadValue());
+                aim = (Vector2)(cursor - creaturePosition);
+            }
+            bool mouseHeld = mouse != null && mouse.leftButton.isPressed;
+            bool mousePressed = mouse != null && mouse.leftButton.wasPressedThisFrame;
 
             return new CreatureInput
             {
                 Move = move,
                 JumpHeld = kb.spaceKey.isPressed || kb.wKey.isPressed || kb.upArrowKey.isPressed,
                 JumpPressed = kb.spaceKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame,
-                ActionHeld = kb.eKey.isPressed,
-                ActionPressed = kb.eKey.wasPressedThisFrame,
-                Aim = new Vector2(move, 0f),
+                ActionHeld = kb.eKey.isPressed || mouseHeld,
+                ActionPressed = kb.eKey.wasPressedThisFrame || mousePressed,
+                SwapPressed = kb.qKey.wasPressedThisFrame,
+                Aim = aim,
             };
         }
 
@@ -67,6 +79,7 @@ namespace Picknick.Sandbox
                 JumpPressed = pad.buttonSouth.wasPressedThisFrame,
                 ActionHeld = pad.buttonWest.isPressed || pad.rightTrigger.isPressed,
                 ActionPressed = pad.buttonWest.wasPressedThisFrame || pad.rightTrigger.wasPressedThisFrame,
+                SwapPressed = pad.buttonNorth.wasPressedThisFrame,
                 Aim = pad.rightStick.ReadValue(),
             };
         }
@@ -78,6 +91,7 @@ namespace Picknick.Sandbox
             into.JumpPressed |= from.JumpPressed;
             into.ActionHeld |= from.ActionHeld;
             into.ActionPressed |= from.ActionPressed;
+            into.SwapPressed |= from.SwapPressed;
             if (from.Aim.sqrMagnitude > into.Aim.sqrMagnitude) into.Aim = from.Aim;
         }
     }

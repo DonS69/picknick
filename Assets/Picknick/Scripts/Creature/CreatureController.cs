@@ -18,6 +18,7 @@ namespace Picknick.Creature
         CreatureInput input;
         float coyoteTimer;
         float jumpBufferTimer;
+        float noSteerTimer;
         readonly List<Collider2D> groundHits = new List<Collider2D>(8);
 
         public CreatureTuning Tuning => tuning;
@@ -28,6 +29,15 @@ namespace Picknick.Creature
         public Rigidbody2D StandingOn { get; private set; }
 
         public int FacingDirection { get; private set; } = 1;
+
+        /// <summary>This frame's input, for abilities to read.</summary>
+        public CreatureInput Input => input;
+
+        /// <summary>While carried, the carrier moves us and our own movement is off.</summary>
+        public bool IsCarried { get; set; }
+
+        /// <summary>Caps falling speed. Feather lowers it to glide; reset every physics step.</summary>
+        public float FallSpeedLimit { get; set; } = float.PositiveInfinity;
 
         void Awake()
         {
@@ -41,7 +51,7 @@ namespace Picknick.Creature
         {
             tuning = value != null ? value : ScriptableObject.CreateInstance<CreatureTuning>();
 
-            body.mass = tuning.mass;
+            SetMass(tuning.mass);
             body.gravityScale = tuning.gravityScale;
             body.freezeRotation = true;
             body.interpolation = RigidbodyInterpolation2D.Interpolate;
@@ -51,6 +61,25 @@ namespace Picknick.Creature
             // No friction, otherwise creatures stick to walls and to each other's sides.
             // Riding on a moving creature is handled explicitly via StandingOn.
             box.sharedMaterial = new PhysicsMaterial2D("Creature") { friction = 0f, bounciness = 0f };
+        }
+
+        public void SetMass(float mass) => body.mass = mass;
+
+        /// <summary>
+        /// Push from outside (Magnet pull). Briefly stops our own steering so the force isn't cancelled.
+        /// </summary>
+        public void AddExternalForce(Vector2 force)
+        {
+            body.AddForce(force);
+            noSteerTimer = Mathf.Max(noSteerTimer, 0.1f);
+        }
+
+        /// <summary>Set velocity directly (thrown, dropped) and keep it for a moment.</summary>
+        public void Launch(Vector2 velocity, float noSteerTime)
+        {
+            body.linearVelocity = velocity;
+            noSteerTimer = Mathf.Max(noSteerTimer, noSteerTime);
+            coyoteTimer = 0f;
         }
 
         public void SetInput(in CreatureInput next)
@@ -65,6 +94,17 @@ namespace Picknick.Creature
         void FixedUpdate()
         {
             float dt = Time.fixedDeltaTime;
+            float fallLimit = FallSpeedLimit;
+            FallSpeedLimit = float.PositiveInfinity;
+            noSteerTimer -= dt;
+
+            if (IsCarried)
+            {
+                IsGrounded = false;
+                StandingOn = null;
+                return;
+            }
+
             UpdateGrounded();
 
             coyoteTimer = IsGrounded ? tuning.coyoteTime : coyoteTimer - dt;
@@ -74,7 +114,7 @@ namespace Picknick.Creature
             float platformVx = StandingOn != null ? StandingOn.linearVelocity.x : 0f;
 
             // In the air with no input we keep momentum, so throws and pulls aren't cancelled.
-            bool steering = IsGrounded || Mathf.Abs(input.Move) > 0.01f;
+            bool steering = noSteerTimer <= 0f && (IsGrounded || Mathf.Abs(input.Move) > 0.01f);
             if (steering)
             {
                 float target = input.Move * tuning.moveSpeed + platformVx;
@@ -90,6 +130,7 @@ namespace Picknick.Creature
                 IsGrounded = false;
             }
 
+            velocity.y = Mathf.Max(velocity.y, -fallLimit);
             body.linearVelocity = velocity;
             body.gravityScale = tuning.gravityScale * GravityMultiplier(velocity.y);
         }

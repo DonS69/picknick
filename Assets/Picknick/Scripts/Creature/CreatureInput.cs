@@ -13,6 +13,7 @@ namespace Picknick.Creature
         public bool JumpPressed;
         public bool ActionHeld;
         public bool ActionPressed;
+        public bool SwapPressed;
         public Vector2 Aim;
     }
 }
