@@ -31,6 +31,7 @@ namespace Picknick.Net
         LocalInputRouter router;
         List<CreatureController> creatures;
         NetworkManager network;
+        UnityTransport transport;
         ulong[] owners;
         CreatureInput[] pending;
         int fixedSteps;
@@ -95,19 +96,14 @@ namespace Picknick.Net
 
         void StartOnline(bool host)
         {
-            var go = new GameObject("NetworkManager");
-            var transport = go.AddComponent<UnityTransport>();
-            network = go.AddComponent<NetworkManager>();
-            network.NetworkConfig = new NetworkConfig
+            if (network == null)
+                CreateNetworkManager();
+            if (network.IsListening || network.ShutdownInProgress)
             {
-                NetworkTransport = transport,
-                // Every peer builds the room itself; don't let Netcode load or sync scenes.
-                EnableSceneManagement = false,
-            };
+                status = "Still closing the last session, try again in a moment.";
+                return;
+            }
             transport.SetConnectionData(address, port, host ? "0.0.0.0" : null);
-
-            network.OnClientConnectedCallback += OnClientConnected;
-            network.OnClientDisconnectCallback += OnClientDisconnected;
 
             ClearOwners();
             bool started = host ? network.StartHost() : network.StartClient();
@@ -139,16 +135,30 @@ namespace Picknick.Net
             router.enabled = false;
         }
 
+        /// <summary>
+        /// Made once and reused for every session. Destroying it ourselves right after a shutdown
+        /// makes Netcode shut down twice and touch an already-closed transport.
+        /// </summary>
+        void CreateNetworkManager()
+        {
+            var go = new GameObject("NetworkManager");
+            transport = go.AddComponent<UnityTransport>();
+            network = go.AddComponent<NetworkManager>();
+            network.NetworkConfig = new NetworkConfig
+            {
+                NetworkTransport = transport,
+                // Every peer builds the room itself; don't let Netcode load or sync scenes.
+                EnableSceneManagement = false,
+            };
+            network.OnClientConnectedCallback += OnClientConnected;
+            network.OnClientDisconnectCallback += OnClientDisconnected;
+        }
+
         void GoOffline()
         {
-            if (network != null)
-            {
-                network.OnClientConnectedCallback -= OnClientConnected;
-                network.OnClientDisconnectCallback -= OnClientDisconnected;
-                if (network.IsListening) network.Shutdown();
-                Destroy(network.gameObject);
-                network = null;
-            }
+            // Netcode may already have shut itself down (e.g. after a failed join).
+            if (network != null && network.IsListening && !network.ShutdownInProgress)
+                network.Shutdown();
 
             Authority.IsSimulating = true;
             Physics2D.simulationMode = SimulationMode2D.FixedUpdate;
