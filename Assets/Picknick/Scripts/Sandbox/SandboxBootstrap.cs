@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Picknick.Abilities;
 using Picknick.CameraRig;
+using Picknick.Net;
 using Picknick.Creature;
 using UnityEngine;
 
@@ -62,6 +63,7 @@ namespace Picknick.Sandbox
             BuildLevel();
             SpawnCreatures();
             SetUpCamera();
+            gameObject.AddComponent<NetSession>().Init(router);
         }
 
         void LateUpdate()
@@ -187,6 +189,7 @@ namespace Picknick.Sandbox
                     creature.ApplyTuning(tuning);
                 go.AddComponent<FallRespawn>().killHeight = KillHeight;
                 go.AddComponent<Magnetic>();
+                go.AddComponent<SyncedBody>();
                 var abilities = go.AddComponent<CreatureAbilities>();
 
                 Color color = CreatureColors[i % CreatureColors.Length];
@@ -247,6 +250,7 @@ namespace Picknick.Sandbox
             body.mass = mass;
             body.gravityScale = 3f;
             body.freezeRotation = true;
+            go.AddComponent<SyncedBody>();
             return go;
         }
 

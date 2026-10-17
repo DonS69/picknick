@@ -1,3 +1,4 @@
+using Picknick.Creature;
 using UnityEngine;
 
 namespace Picknick.Abilities
@@ -60,8 +61,12 @@ namespace Picknick.Abilities
             if (beam != null) beam.enabled = false;
         }
 
+        /// <summary>Online clients don't simulate; they just show what the host's Magnet is pulling.</summary>
+        public void ShowTarget(Magnetic magnetic) => target = magnetic;
+
         void Update()
         {
+            if (!Authority.IsSimulating) return;
             if (!Creature.Input.ActionHeld)
                 target = null;
             else if (target == null)
@@ -78,6 +83,7 @@ namespace Picknick.Abilities
 
         void FixedUpdate()
         {
+            if (!Authority.IsSimulating) return;
             if (target == null || !target.isActiveAndEnabled) { target = null; return; }
 
             Rigidbody2D me = Creature.Body;

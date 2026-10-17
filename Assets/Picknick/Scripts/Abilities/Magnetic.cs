@@ -9,6 +9,9 @@ namespace Picknick.Abilities
     {
         public static readonly List<Magnetic> All = new List<Magnetic>();
 
+        /// <summary>Every magnetic object in creation order, active or not. Same order on every peer.</summary>
+        public static readonly List<Magnetic> Registered = new List<Magnetic>();
+
         public Rigidbody2D Body { get; private set; }
         public CreatureController Creature { get; private set; }
         public Vector2 Position => transform.position;
@@ -21,7 +24,10 @@ namespace Picknick.Abilities
         {
             Body = GetComponent<Rigidbody2D>();
             Creature = GetComponent<CreatureController>();
+            Registered.Add(this);
         }
+
+        void OnDestroy() => Registered.Remove(this);
 
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);

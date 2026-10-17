@@ -2,7 +2,9 @@
     "name": "Picknick.Runtime",
     "rootNamespace": "Picknick",
     "references": [
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.Netcode.Runtime",
+        "Unity.Collections"
     ],
     "autoReferenced": true
 }

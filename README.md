@@ -34,6 +34,16 @@ Things to try: get all four onto the high ledge (stack, use the crate, or get th
 
 Tune movement by creating **Assets > Create > Picknick > Creature Tuning**, assigning it to the `Sandbox` object's `Tuning` field, and changing values in Play mode.
 
+## Online play (test on one PC)
+
+The room is simulated by the player who hosts; everyone else sends their input and sees what the host sends back.
+
+1. **Window > Multiplayer > Multiplayer Play Mode**, tick **Player 2** (and 3, 4 if you like). Extra game windows open.
+2. Press **Play**. In the main window click **Host game** (bottom right). In each extra window click **Join game** (address `127.0.0.1`).
+3. Each window controls its own creature. **Tab** switches to a creature nobody is controlling.
+
+To play across two PCs on the same network, the host shares their local IP address (for example `192.168.1.20`) and the others type it before Join. Over the internet this needs port forwarding until Steam is added (plan step 6).
+
 ## Room 1: The Kitchen Counter
 
 Everyone has to end up in the mouse hole on top of the fridge, at the same time. Falling sends you back to your last checkpoint.
@@ -54,7 +64,7 @@ Assets/Picknick/
     Abilities/          Magnet, Feather, Strong (step 3)
     Puzzle/             Zone, Checkpoint, ExitZone, HoldDoor, MagnetLever, HookedItem, Hatch
     Rooms/              KitchenRoom (Room 1 graybox, built at runtime)
-    Net/                Netcode + Steam (steps 5–6)
+    Net/                NetSession (host/join, input, snapshots), SyncedBody
   Editor/               Picknick.Editor assembly: menu items
   Scenes/ Prefabs/ Rooms/ Settings/
 ```

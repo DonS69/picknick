@@ -10,10 +10,11 @@ namespace Picknick.Puzzle
 
         void FixedUpdate()
         {
-            if (key == null || keyhole == null || !keyhole.Contains(key.position))
+            if (key == null || keyhole == null || !key.gameObject.activeSelf || !keyhole.Contains(key.position))
                 return;
 
-            Destroy(key.gameObject);
+            // Deactivate rather than destroy, so online peers keep the same list of synced objects.
+            key.gameObject.SetActive(false);
             gameObject.SetActive(false);
         }
     }
