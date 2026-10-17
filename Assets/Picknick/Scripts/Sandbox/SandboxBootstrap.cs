@@ -45,6 +45,7 @@ namespace Picknick.Sandbox
         protected IReadOnlyList<CreatureController> Creatures => router.Creatures;
         protected virtual Vector2 SpawnOrigin => new Vector2(0f, 1f);
         protected virtual float KillHeight => -6f;
+        protected virtual Color BackgroundColor => new Color(0.98f, 0.93f, 0.84f);
 
         protected virtual string Hint =>
             "Magnet: hold to pull blue metal or a teammate to you. In the air, or on fixed metal, it pulls YOU.\n" +
@@ -75,24 +76,71 @@ namespace Picknick.Sandbox
 
         protected virtual void OnGUI()
         {
-            hintStyle ??= new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(0.2f, 0.2f, 0.2f) } };
-            GUI.Label(new Rect(12, 8, 900, 120),
+            hintStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                normal = { textColor = new Color(0.2f, 0.2f, 0.2f) },
+                padding = new RectOffset(8, 8, 6, 6),
+            };
+            hintBackground ??= SolidTexture(new Color(1f, 0.97f, 0.9f, 0.9f));
+
+            // Panel behind the help text so it stays readable over walls.
+            var hint = new GUIContent(
                 "Keyboard: A/D move, Space jump, mouse aims, E or left click = ability, Q = swap badge with the nearest teammate, Tab = switch creature\n" +
                 "Gamepads: one per creature. Stick move, A jump, right stick aims, X or RT = ability, Y = swap\n" +
-                Hint, hintStyle);
+                Hint);
+            float width = Mathf.Min(hintStyle.CalcSize(hint).x, Screen.width - 16f);
+            var hintRect = new Rect(8, 8, width, hintStyle.CalcHeight(hint, width));
+            GUI.DrawTexture(hintRect, hintBackground);
+            GUI.Label(hintRect, hint, hintStyle);
 
             Camera cam = Camera.main;
             if (cam == null) return;
+            labelStyle ??= new GUIStyle(hintStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, padding = new RectOffset() };
+            sideLabelStyle ??= new GUIStyle(labelStyle) { alignment = TextAnchor.MiddleRight };
+
             foreach (CreatureController creature in router.Creatures)
             {
                 var abilities = creature.GetComponent<CreatureAbilities>();
-                Vector3 screen = cam.WorldToScreenPoint(creature.transform.position + new Vector3(0f, 0.95f, 0f));
+                string label = abilities.Current.ToString();
+
+                // Someone standing on (or carried above) us would cover a label above our head,
+                // so put ours on the left side instead.
+                bool covered = HasCreatureAbove(creature);
+                Vector3 anchor = creature.transform.position + (covered ? new Vector3(-0.5f, 0f, 0f) : new Vector3(0f, 0.95f, 0f));
+                Vector3 screen = cam.WorldToScreenPoint(anchor);
                 if (screen.z < 0f) continue;
-                var rect = new Rect(screen.x - 40f, Screen.height - screen.y - 10f, 80f, 20f);
-                GUI.Label(rect, abilities.Current.ToString(), labelStyle ??= new GUIStyle(hintStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
+
+                float y = Screen.height - screen.y - 10f;
+                if (covered)
+                    GUI.Label(new Rect(screen.x - 84f, y, 80f, 20f), label, sideLabelStyle);
+                else
+                    GUI.Label(new Rect(screen.x - 40f, y, 80f, 20f), label, labelStyle);
             }
         }
 
+        bool HasCreatureAbove(CreatureController creature)
+        {
+            Vector2 me = creature.transform.position;
+            foreach (CreatureController other in router.Creatures)
+            {
+                if (other == creature) continue;
+                Vector2 offset = (Vector2)other.transform.position - me;
+                if (Mathf.Abs(offset.x) < 0.7f && offset.y > 0f && offset.y < 1.3f)
+                    return true;
+            }
+            return false;
+        }
+
+        static Texture2D SolidTexture(Color color)
+        {
+            var tex = new Texture2D(1, 1);
+            tex.SetPixel(0, 0, color);
+            tex.Apply();
+            return tex;
+        }
+
+        Texture2D hintBackground;
+        GUIStyle sideLabelStyle;
         GUIStyle labelStyle;
 
         protected virtual void BuildLevel()
@@ -166,7 +214,7 @@ namespace Picknick.Sandbox
                 cam.transform.position = new Vector3(0f, 2f, -10f);
             }
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.98f, 0.93f, 0.84f);
+            cam.backgroundColor = BackgroundColor;
 
             SharedCamera shared = cam.GetComponent<SharedCamera>();
             if (shared == null)
@@ -185,7 +233,7 @@ namespace Picknick.Sandbox
 
         protected GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
         {
-            GameObject go = Visual(parent, name, center, size, color, -1);
+            GameObject go = Visual(parent, name, center, size, color, -3);
             go.AddComponent<BoxCollider2D>();
             return go;
         }
