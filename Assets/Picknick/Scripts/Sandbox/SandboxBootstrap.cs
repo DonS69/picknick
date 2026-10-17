@@ -45,6 +45,7 @@ namespace Picknick.Sandbox
         protected IReadOnlyList<CreatureController> Creatures => router.Creatures;
         protected virtual Vector2 SpawnOrigin => new Vector2(0f, 1f);
         protected virtual float KillHeight => -6f;
+        protected virtual Color BackgroundColor => new Color(0.98f, 0.93f, 0.84f);
 
         protected virtual string Hint =>
             "Magnet: hold to pull blue metal or a teammate to you. In the air, or on fixed metal, it pulls YOU.\n" +
@@ -213,7 +214,7 @@ namespace Picknick.Sandbox
                 cam.transform.position = new Vector3(0f, 2f, -10f);
             }
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.98f, 0.93f, 0.84f);
+            cam.backgroundColor = BackgroundColor;
 
             SharedCamera shared = cam.GetComponent<SharedCamera>();
             if (shared == null)
@@ -232,7 +233,7 @@ namespace Picknick.Sandbox
 
         protected GameObject Block(Transform parent, string name, Vector2 center, Vector2 size, Color color)
         {
-            GameObject go = Visual(parent, name, center, size, color, -1);
+            GameObject go = Visual(parent, name, center, size, color, -3);
             go.AddComponent<BoxCollider2D>();
             return go;
         }
